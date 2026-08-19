@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "secret-os",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Secret provider for aux4/secret backed by the operating system keystore",
   "license": "Apache-2.0",
   "tags": [
