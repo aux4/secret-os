@@ -47,19 +47,43 @@ jobs:
   # interaction is not allowed". Running them here would fail for reasons that
   # say nothing about the code, so the keystore tests are run on a real desktop
   # session instead. Lint and a full cross-platform build still gate publish.
-  # The keystore tests are NOT run here, and the omission is deliberate.
+  # The suite drives the real keystore, which needs a D-Bus session with an
+  # unlocked keyring -- a runner has neither.
   #
-  # A runner has no D-Bus session with an unlocked keyring, and creating one
-  # (dbus-launch + gnome-keyring-daemon --unlock, address exported to the job)
-  # was tried: secret-tool then blocks indefinitely rather than failing, hanging
-  # the job. A macOS runner is no better -- its login keychain refuses
-  # non-interactive writes with "User interaction is not allowed".
-  #
-  # So the keystore behaviour is verified on a real desktop session instead, and
-  # lint plus a full cross-platform build gate the release. The Linux Secret
-  # Service path in particular has no automated coverage.
-  publish:
+  # Two details make this work, and both were found the hard way: the keyrings
+  # directory must exist first, and the password must be a newline rather than
+  # an empty string. Without them gnome-keyring never creates the login
+  # collection and falls back to a GUI prompter, which on a headless runner
+  # blocks forever instead of failing. Verified against this recipe in a Linux
+  # container before being trusted here; timeout-minutes keeps a regression to
+  # ten minutes rather than six hours.
+  test-linux:
     needs: [lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - name: Start a Secret Service session
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
+          eval "$(dbus-launch --sh-syntax)"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.local/share/keyrings"
+          printf '\n' | gnome-keyring-daemon --unlock --components=secrets --daemonize
+
+      - uses: aux4/action@v1
+        with:
+          command: test
+          build_command: aux4 builder linux
+
+  publish:
+    needs: [lint, test-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
