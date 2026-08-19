@@ -16,7 +16,7 @@
   ],
   "system": [
     [
-      "test:secret-tool --version",
+      "test:which secret-tool",
       "apt:libsecret-tools",
       "dnf:libsecret",
       "apk:libsecret",
