@@ -1,0 +1,68 @@
+name: Publish Package
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**'
+      - '!.github/**'
+      - '!README.md'
+      - '!LICENSE'
+      - '!.gitignore'
+
+  workflow_dispatch:
+    inputs:
+      level:
+        description: 'Release level (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: publish-package
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aux4/action@v1
+        with:
+          command: lint
+          strict: 'true'
+
+  # The test suite drives the real OS keystore, which a CI runner cannot
+  # provide: Linux runners have no D-Bus session for the Secret Service, and a
+  # macOS runner's login keychain rejects non-interactive writes with "User
+  # interaction is not allowed". Running them here would fail for reasons that
+  # say nothing about the code, so the keystore tests are run on a real desktop
+  # session instead. Lint and a full cross-platform build still gate publish.
+  publish:
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - uses: aux4/action@v1
+        with:
+          command: publish
+          level: ${{ inputs.level || 'patch' }}
+          build_command: aux4 builder all
+          aux4_token: ${{ secrets.AUX4_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
