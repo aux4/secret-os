@@ -11,9 +11,6 @@
     "keychain",
     "keyring"
   ],
-  "dependencies": [
-    "aux4/secret"
-  ],
   "profiles": [
     {
       "name": "main",
