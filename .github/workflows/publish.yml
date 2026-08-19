@@ -82,8 +82,40 @@ jobs:
           command: test
           build_command: aux4 builder linux
 
+  # macOS refuses non-interactive writes to the *login* keychain ("User
+  # interaction is not allowed"), because it is locked. The fix is the same
+  # shape as the Linux one: do not fight the default keychain, create a fresh
+  # one with a known password and unlock it. set-keychain-settings drops the
+  # auto-lock timeout so a slow run cannot re-lock it mid-suite.
+  #
+  # The provider passes no -k, so it writes to whichever keychain is default --
+  # making it default is enough, and no production code changes for the test.
+  test-darwin:
+    needs: [lint]
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - name: Create an unlocked keychain
+        run: |
+          security create-keychain -p "" aux4-test.keychain
+          security set-keychain-settings aux4-test.keychain
+          security unlock-keychain -p "" aux4-test.keychain
+          security default-keychain -s aux4-test.keychain
+          security list-keychains -d user -s aux4-test.keychain
+
+      - uses: aux4/action@v1
+        with:
+          command: test
+          build_command: aux4 builder darwin
+
   publish:
-    needs: [lint, test-linux]
+    needs: [lint, test-linux, test-darwin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
